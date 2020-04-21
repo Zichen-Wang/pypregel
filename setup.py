@@ -1,13 +1,13 @@
 #!/usr/bin/env python
-from steuptools import setup, find_packages
+from setuptools import setup, find_packages
 
 
-with open('README.rst') as readme_file:
+with open('README.md') as readme_file:
     README = readme_file.read()
 
 
 install_requires = [
-    'mpi4py'
+    'mpi4py',
     'wheel',
     'setuptools'
 ]
