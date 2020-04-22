@@ -21,4 +21,3 @@ setup(
     author='Zichen Wang; Hongxin Chu; Chufeng Gao',
     install_requires=install_requires,
 )
-
