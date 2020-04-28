@@ -1,7 +1,7 @@
 from pypregel.vertex import Vertex
 
 
-def _default_parse(line, header):
+def _default_parser(line, header):
     if header:
         return int(line)
     else:
@@ -17,18 +17,18 @@ def _default_parse(line, header):
 
 
 class Reader:
-    def __init__(self, vertex_class, filename, user_parse=None):
+    def __init__(self, vertex_class, filename, user_parser=None):
         if not issubclass(vertex_class, Vertex):
             raise TypeError("vertex_class should extend Vertex")
 
         self.__fp = open(filename, 'r')
-        self.__parse = _default_parse
+        self.__parser = _default_parser
         self.__Vertex = vertex_class
 
-        if user_parse:
-            self.__parse = user_parse
+        if user_parser:
+            self.__parser = user_parser
 
-        self.__num_of_vertices = self.__parse(self.__fp.readline(), header=True)
+        self.__num_of_vertices = self.__parser(self.__fp.readline(), header=True)
 
     '''
     header: n
@@ -45,7 +45,7 @@ class Reader:
         cnt = 0
         vertex_list = []
         for line in self.__fp:
-            vertex_id, vertex_value, edges = self.__parse(line, header=False)
+            vertex_id, vertex_value, edges = self.__parser(line, header=False)
             vertex_list.append(self.__Vertex(self.__num_of_vertices, vertex_id, vertex_value, edges))
             cnt += 1
             if cnt == n:
