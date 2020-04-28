@@ -38,22 +38,20 @@ class Reader:
     def get_num_of_vertices(self):
         return self.__num_of_vertices
 
-
     def read(self, n):
         if n <= 0:
             raise ValueError("n should be positive.")
 
         cnt = 0
-        vertice_list = []
+        vertex_list = []
         for line in self.__fp:
             vertex_id, vertex_value, edges = self.__parse(line, header=False)
-            vertice_list.append(self.__Vertex(self.__num_of_vertices, vertex_id, vertex_value, edges))
+            vertex_list.append(self.__Vertex(self.__num_of_vertices, vertex_id, vertex_value, edges))
             cnt += 1
             if cnt == n:
-                return vertice_list
+                return vertex_list
 
-        return vertice_list
-
+        return vertex_list
 
     def close(self):
         self.__fp.close()

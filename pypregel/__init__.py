@@ -17,20 +17,19 @@ class Pypregel:
 
             for i in range(0, num_of_workers):
                 if i < n % num_of_workers:
-                    vertices_list = self.__reader.read(batch + 1)
+                    vertex_list = self.__reader.read(batch + 1)
                 else:
-                    vertices_list = self.__reader.read(batch)
+                    vertex_list = self.__reader.read(batch)
 
-                comm.send(vertices_list, dest=i+1, tag=0)
+                comm.send(vertex_list, dest=i+1, tag=0)
         else:
-            vertices_list = comm.recv(source=0, tag=0)
-
+            vertex_list = comm.recv(source=0, tag=0)
 
         comm.Barrier()
 
         if rank > 0:
-            print(len(vertices_list))
-            for v in vertices_list:
+            print(len(vertex_list))
+            for v in vertex_list:
                 print(v)
 
         MPI.Finalize()

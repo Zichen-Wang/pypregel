@@ -4,8 +4,6 @@ from pypregel import Pypregel
 from pypregel.vertex import Vertex
 from pypregel.reader import Reader
 
-from mpi4py import MPI
-
 
 class PageRankVertex(Vertex):
     def compute(self):
@@ -22,7 +20,6 @@ class PageRankVertex(Vertex):
         else:
             self.vote_to_halt()
         
-
 
 def main():
     if len(sys.argv) < 2:
