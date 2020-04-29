@@ -8,6 +8,8 @@ class _Master:
         if self._num_of_workers <= 0:
             raise ValueError("the number of workers should be positive.")
 
+
+        # Master performs input
         n = reader.read_num_of_vertices()
         n, self._num_of_workers = comm.bcast((n, self._num_of_workers), root=0)
         batch_size = 1
@@ -31,6 +33,26 @@ class _Master:
         for i in range(self._num_of_workers):
             comm.send(end_of_vertex, dest=i + 1, tag=0)
 
+        '''
+        Start to loop through supersteps.
+        Master sends superstep, global aggregation result of last superstep.
+        Workers receive the aggregation result of last superstep, workers synchronize superstep number.
+        Workers loop through current active vertices.
+        Workers send local aggregation result to master.
+        Global Aggregation is performed in master.
+        '''
+
     def run(self):
-        pass
+        # send global superstep
+        [self.comm.send(self._super_step, dest=i + 1, tag=0) for i in range(self._num_of_workers)]
+
+        # send global aggregation results
+        # [self.comm.send(agg_global, dest=i + 1, tag=1) for i in range(self._num_of_workers)]
+
+        # receive global aggregation results
+        # [self.comm.recv(agg_local, dest=i + 1, tag=1) for i in range(self._num_of_workers)]
+
+        # increment global superstep
+        self._super_step += 1
+
 
