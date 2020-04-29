@@ -1,35 +1,23 @@
-import os
-
 from mpi4py import MPI
+from pypregel.master import _Master
+from pypregel.worker import _Worker
 
 
 class Pypregel:
     def __init__(self, reader):
-        self.__reader = reader
+        self._comm = MPI.COMM_WORLD
+        self.rank = self._comm.Get_rank()
+        if self.rank == 0:
+            self._master = _Master(self._comm, reader)
+        else:
+            self._worker = _Worker(self._comm)
+
+        self._comm.Barrier()
 
     def run(self):
-        comm = MPI.COMM_WORLD
-        rank = comm.Get_rank()
-        if rank == 0:
-            n = self.__reader.get_num_of_vertices()
-            num_of_workers = comm.Get_size() - 1
-            batch = n // num_of_workers
-
-            for i in range(0, num_of_workers):
-                if i < n % num_of_workers:
-                    vertex_list = self.__reader.read(batch + 1)
-                else:
-                    vertex_list = self.__reader.read(batch)
-
-                comm.send(vertex_list, dest=i+1, tag=0)
+        if self.rank == 0:
+            self._master.run()
         else:
-            vertex_list = comm.recv(source=0, tag=0)
-
-        comm.Barrier()
-
-        if rank > 0:
-            print(len(vertex_list))
-            for v in vertex_list:
-                print(v)
+            self._worker.run()
 
         MPI.Finalize()
