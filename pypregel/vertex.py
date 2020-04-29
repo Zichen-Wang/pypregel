@@ -6,12 +6,21 @@ class Vertex:
         self._vid = vid
         self._value = value
         self._out_edges = out_edges
+        self._worker = None
+
+        # Messages received in last superstep
+        self.prev_messages = []
+        # Messages received in current superstep
+        self.cur_messages = []
 
     def set_worker(self, worker):
         self._worker = worker
 
+    def has_worker(self):
+        return self._worker is None
+
     def compute(self):
-        pass
+        raise NotImplementedError("Vertex compute() interface not implemented.")
 
     def get_vertex_id(self):
         return self._vid
@@ -23,15 +32,21 @@ class Vertex:
         self._value = value
 
     def superstep(self):
+        if not self.has_worker():
+            raise AttributeError("Vertex worker not set")
         return self._worker.get_superstep()
 
     def get_out_edges(self):
         return self._out_edges
 
     def get_num_of_vertices(self):
+        if not self.has_worker():
+            raise AttributeError("Vertex worker not set")
         return self._worker.get_num_of_vertices()
 
     def vote_to_halt(self):
+        if not self.has_worker():
+            raise AttributeError("Vertex worker not set")
         self._worker.deactive(self._vid)
 
     def send_message_to_vertex(self, dst_id, msg):
