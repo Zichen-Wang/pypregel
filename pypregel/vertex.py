@@ -10,6 +10,8 @@ class Vertex:
 
         # Messages received in last superstep
         self.prev_messages = []
+        self.message_index = 0
+
         # Messages received in current superstep
         self.cur_messages = []
 
@@ -51,6 +53,17 @@ class Vertex:
 
     def send_message_to_vertex(self, dst_id, msg):
         pass
+
+    def has_message(self):
+        return self.message_index < len(self.prev_messages)
+
+    def get_message(self):
+        if not self.has_message():
+            raise ValueError("no more message")
+
+        msg = self.prev_messages[self.message_index]
+        self.message_index += 1
+        return msg.value
 
     def send_message_to_all_neighbors(self, msg):
         for e in self._out_edges:

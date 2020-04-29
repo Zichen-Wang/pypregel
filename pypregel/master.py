@@ -1,19 +1,28 @@
+from mpi4py import MPI
+
+
 class _Master:
     def __init__(self, comm, reader):
         self._comm = comm
         self._reader = reader
         self._global_agg = None
         self._super_step = 0
-        self._super_step_num = 30
         self._num_of_workers = comm.Get_size() - 1
 
         if self._num_of_workers <= 0:
             raise ValueError("the number of workers should be positive.")
 
+        self._num_of_vertices = reader.read_num_of_vertices()
+        self._num_of_active_vertices = 0
+
+        self._split_work()
+
+    def _split_work(self):
+        comm = self._comm
+        reader = self._reader
 
         # Master performs input
-        n = reader.read_num_of_vertices()
-        n, self._num_of_workers = comm.bcast((n, self._num_of_workers), root=0)
+        comm.bcast((self._num_of_vertices, self._num_of_workers), root=0)
         batch_size = 1
 
         while True:
@@ -35,35 +44,45 @@ class _Master:
         for i in range(self._num_of_workers):
             comm.send(end_of_vertex, dest=i + 1, tag=0)
 
-        '''
-        Start to loop through supersteps.
-        Master sends superstep, global aggregation result of last superstep.
-        Workers receive the aggregation result of last superstep, workers synchronize superstep number.
-        Workers loop through current active vertices.
-        Workers send local aggregation result to master.
-        Global Aggregation is performed in master.
-        '''
-
     def _aggregate(self, local_aggs):
         pass
         # get global aggregation results from local aggregation results list
         # return result
-    
+
+    '''
+    Start to loop through supersteps.
+    Master sends superstep, global aggregation result of last superstep.
+    Workers receive the aggregation result of last superstep, workers synchronize superstep number.
+    Workers loop through current active vertices.
+    Workers send local aggregation result to master.
+    Global Aggregation is performed in master.
+    '''
+
     def run(self):
-        while self._super_step < self._super_step_num:
-            # send global superstep
-            [self.comm.send(self._super_step, dest=i + 1, tag=0) for i in range(self._num_of_workers)]
+        self._super_step = 1
+        self._num_of_active_vertices = self._num_of_vertices
+        comm = self._comm
 
-            # send global aggregation results
-            [self.comm.send(self._global_agg, dest=i + 1, tag=1) for i in range(self._num_of_workers)]
+        while self._num_of_active_vertices > 0:
+            # broadcast global superstep and global aggregation result
+            comm.bcast((self._super_step, self._global_agg), root=0)
 
-            # receive global aggregation results
-            local_aggs = []
-            [self.comm.recv(local_aggs, dest=i + 1, tag=1) for i in range(self._num_of_workers)]
-            self._global_agg = self._aggregate(local_aggs)
+            # receive global aggregation results (should be improved by tree reduction)
+
 
             # increment global superstep
             self._super_step += 1
 
+            # reset the number of active vertices
+            self._num_of_active_vertices = 0
 
+            # set a barrier before reduce the number of active vertices
+            comm.Barrier()
 
+            comm.Reduce(None,
+                        [self._num_of_active_vertices, MPI.INT],
+                        op=MPI.SUM,
+                        root=0)
+
+        # broadcast to all workers that the computation is over
+        comm.bcast((-1, None), root=0)

@@ -10,8 +10,9 @@ class PageRankVertex(Vertex):
     def compute(self):
         if self.superstep() >= 1:
             s = 0
-            for msg in self.prev_messages:
-                s += msg.value
+            while self.has_message():
+                msg = self.get_message()
+                s += msg
 
             self.set_value(0.15 / self.get_num_of_vertices() + 0.85 * s)
 

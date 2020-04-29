@@ -8,14 +8,26 @@ class _Worker:
         self._local_superstep = 0
         self._local_agg = None
         self._my_id = self._comm.Get_rank()
+        self._read()
+
         self._num_of_vertices = None
         self._num_of_workers = None
-        self._num_of_vertices, self._num_of_workers \
-            = comm.bcast((self._num_of_vertices, self._num_of_workers), root=0)
-        self._vertex_list = []
 
+        self._vertex_list = []
         self._active_vertices = []
         self._active_vertices_next_step = []
+
+        self._in_messages = []
+        self._out_messages = []
+
+        self._in_lock = threading.Lock()
+        self._out_lock = threading.Lock()
+
+    def _read(self):
+        comm = self._comm
+
+        self._num_of_vertices, self._num_of_workers \
+            = comm.bcast((self._num_of_vertices, self._num_of_workers), root=0)
 
         while True:
             vertex_list = comm.recv(source=0, tag=0)
@@ -26,12 +38,6 @@ class _Worker:
                 v.set_worker(self)
                 self._vertex_list.append(v)
                 self._active_vertices.append(v)
-
-        self._in_messages = []
-        self._out_messages = []
-
-        self._in_lock = threading.Lock()
-        self._out_lock = threading.Lock()
 
     def get_superstep(self):
         return self._local_superstep
@@ -47,8 +53,6 @@ class _Worker:
         for v in self._vertex_list:
             print(v)
 
-
-
     '''
     Start to loop through supersteps.
     Master sends superstep, global aggregation result of last superstep.
@@ -57,12 +61,19 @@ class _Worker:
     Workers send local aggregation result to master.
     Global Aggregation is performed in master.
     '''
+
     def run(self):
-        # local superstep synchronization
-        self._local_superstep = self.comm.recv(source=0, tag=0)
+        while True:
+            # local superstep synchronization
+            self._local_superstep, self._local_agg = \
+                self._comm.bcast((self._local_superstep, self._local_superstep), root=0)
+
+            # if the computation is over, break
+            if self._local_superstep == -1:
+                break
 
         # receive aggregation result of the last superstep
-        self._local_agg = self.comm.recv(source=0, tag=0)
+        self._local_agg = self._comm.recv(source=0, tag=0)
 
         # loop through current active vertices to compute
         '''
@@ -73,5 +84,5 @@ class _Worker:
         '''
         [vertex.compute() for vertex in self._active_vertices]
 
-        # aggregate local vertices
-        self.comm.send(self._local_agg, dest=0, tag=0)
+        # aggregate local vertices (should be improved by tree reduction)
+        #self._comm.send(self._local_agg, dest=0, tag=0)
