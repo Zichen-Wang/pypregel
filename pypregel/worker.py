@@ -11,8 +11,9 @@ class _Worker:
         self._num_of_vertices, self._num_of_workers \
             = comm.bcast((self._num_of_vertices, self._num_of_workers), root=0)
         self._vertex_list = []
-        self._vertex_active_flag = {}
-        self._vertex_active_flag_next_step = {}
+
+        self._active_vertices = []
+        self._active_vertices_next_step = []
 
         while True:
             vertex_list = comm.recv(source=0, tag=0)
@@ -22,8 +23,7 @@ class _Worker:
             for v in vertex_list:
                 v.set_worker(self)
                 self._vertex_list.append(v)
-                self._vertex_active_flag[v.get_vertex_id()] = False
-                self._vertex_active_flag_next_step[v.get_vertex_id()] = False
+                self._active_vertices.append(v)
 
         self._in_messages = []
         self._out_messages = []
