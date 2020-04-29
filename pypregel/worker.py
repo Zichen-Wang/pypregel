@@ -2,9 +2,11 @@ import threading
 
 
 class _Worker:
+    # Graph partition, properties creation, thread creation are done during initialization
     def __init__(self, comm):
         self._comm = comm
         self._local_superstep = 0
+        self._local_agg = None
         self._my_id = self._comm.Get_rank()
         self._num_of_vertices = None
         self._num_of_workers = None
@@ -45,5 +47,31 @@ class _Worker:
         for v in self._vertex_list:
             print(v)
 
+
+
+    '''
+    Start to loop through supersteps.
+    Master sends superstep, global aggregation result of last superstep.
+    Workers receive the aggregation result of last superstep, workers synchronize superstep number.
+    Workers loop through current active vertices.
+    Workers send local aggregation result to master.
+    Global Aggregation is performed in master.
+    '''
     def run(self):
-        self.debug()
+        # local superstep synchronization
+        self._local_superstep = self.comm.recv(source=0, tag=0)
+
+        # receive aggregation result of the last superstep
+        self._local_agg = self.comm.recv(source=0, tag=0)
+
+        # loop through current active vertices to compute
+        '''
+        Deal with in messages
+        Perform computation for current step with value passed in
+        Deal with out messages
+        Pass in aggregator?
+        '''
+        [vertex.compute() for vertex in self._active_vertices]
+
+        # aggregate local vertices
+        self.comm.send(self._local_agg, dest=0, tag=0)
