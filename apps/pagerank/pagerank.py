@@ -4,7 +4,6 @@ from pypregel import Pypregel
 from pypregel.vertex import Vertex, Edge
 from pypregel.reader import Reader
 from pypregel.writer import Writer
-from pypregel.aggregator import Aggregator
 
 
 class PageRankVertex(Vertex):
@@ -19,7 +18,8 @@ class PageRankVertex(Vertex):
 
         if self.superstep() < 30:
             n = len(self.get_out_edges())
-            self.send_message_to_all_neighbors(self.get_value() / n)
+            if n > 0:
+                self.send_message_to_all_neighbors(self.get_value() / n)
         else:
             self.vote_to_halt()
 
@@ -40,7 +40,7 @@ class PageRankReader(Reader):
         edges = []
         if line[1]:
             for e in line[1].split(' '):
-                edges.append(Edge(int(e.split(',')[0]), None))
+                edges.append(Edge(int(e), None))
 
         return PageRankVertex(int(vertex_id), float(vertex_value), edges)
 
@@ -50,14 +50,6 @@ class PageRankWriter(Writer):
         return vertex.get_vertex_id(), str(vertex.get_value())
 
 
-class PageRankAggregator(Aggregator):
-    def aggregate(self, vertices):
-        print("page rank aggregate")
-
-    def __str__(self):
-        return "page rank aggregator"
-
-
 def main():
     if len(sys.argv) < 4:
         print("usage: python %s [config] [graph] [out_file]" % sys.argv[0])
@@ -65,7 +57,6 @@ def main():
 
     pagerank_reader = PageRankReader(sys.argv[1], sys.argv[2])
     pagerank_writer = PageRankWriter(sys.argv[3])
-    pagerank_aggregator = PageRankAggregator()
     pagerank = Pypregel(pagerank_reader, pagerank_writer)
 
     pagerank.run()

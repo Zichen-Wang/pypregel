@@ -1,10 +1,10 @@
 import numpy as np
-import pickle
 
 from mpi4py import MPI
 
 
 _MASTER_MSG_TAG = 0
+_BATCH_SIZE = 1
 _EOF = "$$$"
 
 
@@ -30,10 +30,9 @@ class _Master:
 
         # Master performs input
         comm.bcast((self._num_of_vertices, self._num_of_workers), root=0)
-        batch_size = 1
 
         while True:
-            vertex_list = reader.read_batch(batch_size)
+            vertex_list = reader.read_batch(_BATCH_SIZE)
             if len(vertex_list) == 0:
                 break
 

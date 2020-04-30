@@ -1,6 +1,4 @@
 import numpy as np
-import time
-import pickle
 
 from mpi4py import MPI
 from threading import Thread
@@ -33,7 +31,7 @@ class _Worker:
 
         # vid
         self._active_vertices = set()
-        self._vote_halt_vertices = set()
+        self._halt_vertices = set()
 
         self._read()
 
@@ -71,7 +69,7 @@ class _Worker:
 
     def _init_thread(self):
         # message object deque
-        self._stop_thread = False
+        self._out_stop = SimpleQueue()
         self._out_messages = SimpleQueue()
         _send_thr = Thread(target=self._send_worker, daemon=True)
 
@@ -105,7 +103,7 @@ class _Worker:
             self._out_messages.put_nowait(msg)
 
     def halt(self, vid):
-        self._vote_halt_vertices.add(vid)
+        self._halt_vertices.add(vid)
 
     def get_superstep(self):
         return self._local_superstep
@@ -148,36 +146,33 @@ class _Worker:
             Deal with out messages
             Pass in aggregator?
             '''
-            self._vote_halt_vertices = set()
+            self._cur_messages = self._next_messages
+            self._next_messages = dict()
 
             for v in self._active_vertices:
                 assert v in self._vertex_map
                 self._vertex_map[v].compute()
 
-            # aggregate local vertices (should be improved by tree reduction)
-            # self._comm.send(self._local_agg, dest=0, tag=0)
-
-            while not self._out_messages.empty():
-                time.sleep(0)
+            self._out_messages.put_nowait(_EOF)
+            msg = self._out_stop.get()
+            assert msg == _EOF
 
             comm.Barrier()
 
-            self._cur_messages = self._next_messages
             messaged_vertices = set()
 
             while len(self._in_messages) > 0:
                 msg = self._in_messages.pop()
                 dst_vid = msg.get_dst_vid()
-                if dst_vid not in self._cur_messages:
-                    self._cur_messages[dst_vid] = deque()
+                if dst_vid not in self._next_messages:
+                    self._next_messages[dst_vid] = deque()
 
-                self._cur_messages[dst_vid].append(msg)
+                self._next_messages[dst_vid].append(msg)
                 messaged_vertices.add(dst_vid)
+                if dst_vid in self._halt_vertices:
+                    self._halt_vertices.remove(dst_vid)
 
-            self._next_messages = dict()
-
-            self._active_vertices = self._vertex_map.keys() - \
-                (self._vote_halt_vertices - messaged_vertices)
+            self._active_vertices = self._vertex_map.keys() - self._halt_vertices
 
             size_of_active_vertices = np.zeros(1)
             size_of_active_vertices[0] = len(self._active_vertices)
@@ -196,14 +191,21 @@ class _Worker:
 
     def _send_worker(self):
         comm = self._comm
-
+        stop_flag = False
         while True:
+            if stop_flag and self._out_messages.empty():
+                self._out_stop.put_nowait(_EOF)
+                stop_flag = False
+
             msg = self._out_messages.get()
-            comm.send(
-                msg,
-                self._vertex_to_worker_id(
-                    msg.get_src_vid()),
-                tag=_USER_MSG_TAG)
+            if msg == _EOF:
+                stop_flag = True
+            else:
+                comm.send(
+                    msg,
+                    self._vertex_to_worker_id(
+                        msg.get_dst_vid()),
+                    tag=_USER_MSG_TAG)
             # TODO combiner and local buffer list
 
     def _recv_worker(self):
