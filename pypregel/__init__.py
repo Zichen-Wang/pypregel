@@ -19,6 +19,3 @@ class Pypregel:
             self._master.run()
         else:
             self._worker.run()
-
-        self._comm.Barrier()
-        MPI.Finalize()

@@ -3,7 +3,7 @@ import time
 
 from mpi4py import MPI
 from threading import Thread
-from queue import SimpleQueue
+from queue import Queue
 from collections import deque
 
 from pypregel.message import _Message
@@ -37,11 +37,11 @@ class _Worker:
 
         self._read()
 
-        self._out_messages = SimpleQueue()
+        self._out_messages = Queue()
         self._send_thr = None
         self._sent_messages = 0
 
-        self._in_messages = SimpleQueue()
+        self._in_messages = Queue()
         self._recv_thr = None
         self._received_messages = 0
 
