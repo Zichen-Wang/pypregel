@@ -1,4 +1,5 @@
 import numpy as np
+import time
 
 from mpi4py import MPI
 from threading import Thread
@@ -10,16 +11,17 @@ from pypregel.message import _Message
 
 _MASTER_MSG_TAG = 0
 _USER_MSG_TAG = 1
-_FINISH_MSG_TAG = 2
 _EOF = "$$$"
+_BUFFER_CAPACITY = 100
 
 
 class _Worker:
     # Graph partition, properties creation, thread creation are done during
     # initialization
-    def __init__(self, comm, writer):
+    def __init__(self, comm, writer, combiner):
         self._comm = comm
         self._writer = writer
+        self._combiner = combiner
 
         self._local_superstep = 0
         self._my_id = self._comm.Get_rank()
@@ -35,7 +37,13 @@ class _Worker:
 
         self._read()
 
-        self._init_thread()
+        self._out_messages = SimpleQueue()
+        self._send_thr = None
+        self._sent_messages = 0
+
+        self._in_messages = SimpleQueue()
+        self._recv_thr = None
+        self._received_messages = 0
 
         # vid -> message deque
         self._cur_messages = dict()
@@ -67,18 +75,6 @@ class _Worker:
             dest=0,
             tag=_MASTER_MSG_TAG)
 
-    def _init_thread(self):
-        # message object deque
-        self._out_stop = SimpleQueue()
-        self._out_messages = SimpleQueue()
-        _send_thr = Thread(target=self._send_worker, daemon=True)
-
-        self._in_messages = []
-        _recv_thr = Thread(target=self._recv_worker, daemon=True)
-
-        _send_thr.start()
-        _recv_thr.start()
-
     def has_cur_message(self, vid):
         if vid not in self._cur_messages:
             return False
@@ -100,7 +96,7 @@ class _Worker:
 
             self._next_messages[dst_vid].append(msg)
         else:
-            self._out_messages.put_nowait(msg)
+            self._out_messages.put(msg)
 
     def halt(self, vid):
         self._halt_vertices.add(vid)
@@ -149,78 +145,118 @@ class _Worker:
             self._cur_messages = self._next_messages
             self._next_messages = dict()
 
+            self._send_thr = Thread(target=self._send_worker)
+            self._recv_thr = Thread(target=self._recv_worker)
+            self._sent_messages = 0
+            self._received_messages = 0
+
+            self._send_thr.start()
+            self._recv_thr.start()
+
             for v in self._active_vertices:
                 assert v in self._vertex_map
                 self._vertex_map[v].compute()
 
-            self._out_messages.put_nowait(_EOF)
-            msg = self._out_stop.get()
-            assert msg == _EOF
+            self._out_messages.put(_EOF)
+            self._send_thr.join()
 
             comm.Barrier()
 
-            messaged_vertices = set()
+            comm.send(_EOF, dest=self._my_id, tag=_USER_MSG_TAG)
+            self._recv_thr.join()
 
-            while len(self._in_messages) > 0:
-                msg = self._in_messages.pop()
+            print("%d %d %d\n" % (self._local_superstep, self._sent_messages, self._received_messages))
+
+            while True:
+                msg = self._in_messages.get()
+                if msg == _EOF:
+                    break
+
                 dst_vid = msg.get_dst_vid()
                 if dst_vid not in self._next_messages:
                     self._next_messages[dst_vid] = deque()
 
                 self._next_messages[dst_vid].append(msg)
-                messaged_vertices.add(dst_vid)
-                if dst_vid in self._halt_vertices:
-                    self._halt_vertices.remove(dst_vid)
 
+            self._halt_vertices -= self._next_messages.keys()
+            #print("worker %d step %d: halt %s" % (self._my_id, self._local_superstep, self._halt_vertices))
             self._active_vertices = self._vertex_map.keys() - self._halt_vertices
 
             size_of_active_vertices = np.zeros(1)
             size_of_active_vertices[0] = len(self._active_vertices)
+
             comm.Reduce(size_of_active_vertices,
                         np.zeros(1),
                         op=MPI.SUM,
                         root=0)
 
-            print(
-                "worker %d finishes %d" %
-                (self._my_id, self._local_superstep))
-
-        comm.send(_EOF, dest=self._my_id, tag=_FINISH_MSG_TAG)
+            #print(
+            #    "worker %d finishes %d" %
+            #    (self._my_id, self._local_superstep))
 
         self._write()
 
     def _send_worker(self):
         comm = self._comm
-        stop_flag = False
-        while True:
-            if stop_flag and self._out_messages.empty():
-                self._out_stop.put_nowait(_EOF)
-                stop_flag = False
 
+        # combined_messages: dst_worker_id -> message list
+        # combined_messages map buffers local messages
+        buffer_size = 0
+        combined_messages = dict()
+
+        while True:
             msg = self._out_messages.get()
             if msg == _EOF:
-                stop_flag = True
+                '''
+                if self._combiner:
+                    for worker_dst_id in combined_messages:
+                        comm.send(
+                            combined_messages[worker_dst_id],
+                            dest=worker_dst_id,
+                            tag=_USER_MSG_TAG
+                        )
+                '''
+                break
             else:
+                '''
+                if self._combiner:
+                    dst_worker_id = self._vertex_to_worker_id(msg.get_dst_vid())
+                    if dst_worker_id not in combined_messages:
+                        combined_messages[dst_worker_id] = msg
+                    else:
+                        combined_messages[dst_worker_id] = \
+                            self._combiner.combine(combined_messages[dst_worker_id], msg)
+
+                    buffer_size += 1
+
+                    if buffer_size >= _BUFFER_CAPACITY:
+                        for worker_dst_id in combined_messages:
+                            comm.send(
+                                combined_messages[worker_dst_id],
+                                dest=worker_dst_id,
+                                tag=_USER_MSG_TAG
+                            )
+
+                        combined_messages = dict()
+                        buffer_size = 0
+                else:
+                '''
+                self._sent_messages += 1
                 comm.send(
                     msg,
                     self._vertex_to_worker_id(
                         msg.get_dst_vid()),
-                    tag=_USER_MSG_TAG)
+                    tag=_USER_MSG_TAG
+                )
             # TODO combiner and local buffer list
 
     def _recv_worker(self):
         comm = self._comm
 
         while True:
-            s = MPI.Status()
-            comm.probe(status=s)
-
-            if s.tag == _USER_MSG_TAG:
-                msg = comm.recv(source=MPI.ANY_SOURCE, tag=_USER_MSG_TAG)
-                self._in_messages.append(msg)
-            elif s.tag == _FINISH_MSG_TAG:
-                msg = comm.recv(source=MPI.ANY_SOURCE, tag=_FINISH_MSG_TAG)
-                assert msg == _EOF
+            msg = comm.recv(source=MPI.ANY_SOURCE, tag=_USER_MSG_TAG)
+            self._in_messages.put(msg)
+            if msg == _EOF:
                 break
-
+            self._received_messages += 1
             # TODO combiner

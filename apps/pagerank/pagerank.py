@@ -35,14 +35,14 @@ class PageRankReader(Reader):
             return None
 
         line = line.strip().split(':')
-        vertex_id, vertex_value = line[0].split(',')
+        vertex_id = int(line[0])
 
         edges = []
         if line[1]:
             for e in line[1].split(' '):
                 edges.append(Edge(int(e), None))
 
-        return PageRankVertex(int(vertex_id), float(vertex_value), edges)
+        return PageRankVertex(vertex_id, None, edges)
 
 
 class PageRankWriter(Writer):

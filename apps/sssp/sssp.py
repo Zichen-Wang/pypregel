@@ -15,6 +15,8 @@ class SSSPVertex(Vertex):
         if self.superstep() == 1:
             if self.get_vertex_id() == START_VERTEX_ID:
                 self.set_value(0)
+                for e in self.get_out_edges():
+                    self.send_message_to_vertex(e.get_dst_vid(), e.get_value())
             else:
                 self.set_value(INT_MAX)
         else:
@@ -23,8 +25,8 @@ class SSSPVertex(Vertex):
                 msg = self.get_message()
                 mm = min(mm, msg)
 
-            if mm < self.get_value():
-                mm = self.get_value()
+            if self.get_value() > mm:
+                self.set_value(mm)
                 for e in self.get_out_edges():
                     self.send_message_to_vertex(e.get_dst_vid(), mm + e.get_value())
 
