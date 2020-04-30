@@ -4,13 +4,13 @@ from pypregel.worker import _Worker
 
 
 class Pypregel:
-    def __init__(self, reader):
+    def __init__(self, reader, writer):
         self._comm = MPI.COMM_WORLD
         self.rank = self._comm.Get_rank()
         if self.rank == 0:
-            self._master = _Master(self._comm, reader)
+            self._master = _Master(self._comm, reader, writer)
         else:
-            self._worker = _Worker(self._comm)
+            self._worker = _Worker(self._comm, writer)
 
         self._comm.Barrier()
 
@@ -19,3 +19,6 @@ class Pypregel:
             self._master.run()
         else:
             self._worker.run()
+
+        self._comm.Barrier()
+        MPI.Finalize()

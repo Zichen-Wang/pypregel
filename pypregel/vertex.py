@@ -1,6 +1,6 @@
 class Vertex:
     def __init__(self, vid, value, out_edges):
-        if type(vid) is not int:
+        if not isinstance(vid, int):
             raise TypeError("vertex id should be integer.")
 
         self._vid = vid
@@ -15,7 +15,8 @@ class Vertex:
         return self._worker is not None
 
     def compute(self):
-        raise NotImplementedError("Vertex compute() interface not implemented.")
+        raise NotImplementedError(
+            "Vertex compute() interface not implemented.")
 
     def get_vertex_id(self):
         return self._vid
@@ -57,16 +58,10 @@ class Vertex:
         for e in self._out_edges:
             self.send_message_to_vertex(e.get_dst_vid(), msg_value)
 
-    def __str__(self):
-        s = str(self._vid) + " " + str(self._value) + ": "
-        for e in self._out_edges:
-            s += str(e) + " "
-        return s
-
 
 class Edge:
     def __init__(self, dst_vid, value):
-        if type(dst_vid) is not int:
+        if not isinstance(dst_vid, int):
             raise TypeError("destination id should be integer.")
 
         self._dst_vid = dst_vid
@@ -83,6 +78,3 @@ class Edge:
 
     def set_value(self, value):
         self._value = value
-
-    def __str__(self):
-        return str(self._dst_vid) + " " + str(self._value)

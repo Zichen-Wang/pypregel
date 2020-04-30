@@ -1,12 +1,18 @@
-from mpi4py import MPI
 import numpy as np
+import pickle
+
+from mpi4py import MPI
+
+
+_MASTER_MSG_TAG = 0
+_EOF = "$$$"
 
 
 class _Master:
-    def __init__(self, comm, reader):
+    def __init__(self, comm, reader, writer):
         self._comm = comm
         self._reader = reader
-        self._global_agg = None
+        self._writer = writer
         self._superstep = 0
         self._num_of_workers = comm.Get_size() - 1
 
@@ -39,11 +45,10 @@ class _Master:
 
             for i in range(self._num_of_workers):
                 if len(send_list[i]) > 0:
-                    comm.send(send_list[i], dest=i + 1, tag=0)
+                    comm.send(send_list[i], dest=i + 1, tag=_MASTER_MSG_TAG)
 
-        end_of_vertex = "$$$"
         for i in range(self._num_of_workers):
-            comm.send(end_of_vertex, dest=i + 1, tag=0)
+            comm.send(_EOF, dest=i + 1, tag=_MASTER_MSG_TAG)
 
     def _aggregate(self, local_aggs):
         pass
@@ -65,11 +70,12 @@ class _Master:
         comm = self._comm
 
         while self._num_of_active_vertices > 0:
-            # broadcast global superstep and global aggregation result
+            # broadcast global superstep
             comm.bcast(self._superstep, root=0)
             #print("master step" + str(self._superstep))
 
-            # receive global aggregation results (should be improved by tree reduction)
+            # receive global aggregation results (should be improved by tree
+            # reduction)
 
             # reset the number of active vertices
             reduced_active_vertices = np.zeros(1)
@@ -89,5 +95,15 @@ class _Master:
 
         # broadcast to all workers that the computation is over
         comm.bcast(-1, root=0)
+
+        self._write()
+
+    def _write(self):
+        comm = self._comm
         for i in range(self._num_of_workers):
-            comm.send("$$$", dest=i + 1, tag=0)
+            vertex_list = comm.recv(
+                source=i + 1,
+                tag=_MASTER_MSG_TAG
+            )
+
+            self._writer.write_batch_to_file(vertex_list)

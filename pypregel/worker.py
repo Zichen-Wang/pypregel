@@ -1,5 +1,6 @@
 import numpy as np
 import time
+import pickle
 
 from mpi4py import MPI
 from threading import Thread
@@ -9,10 +10,18 @@ from collections import deque
 from pypregel.message import _Message
 
 
+_MASTER_MSG_TAG = 0
+_USER_MSG_TAG = 1
+_FINISH_MSG_TAG = 2
+_EOF = "$$$"
+
+
 class _Worker:
-    # Graph partition, properties creation, thread creation are done during initialization
-    def __init__(self, comm):
+    # Graph partition, properties creation, thread creation are done during
+    # initialization
+    def __init__(self, comm, writer):
         self._comm = comm
+        self._writer = writer
 
         self._local_superstep = 0
         self._my_id = self._comm.Get_rank()
@@ -26,10 +35,8 @@ class _Worker:
         self._active_vertices = set()
         self._vote_halt_vertices = set()
 
-        self._ROOT_TAG = 0
         self._read()
 
-        self._USER_MESSAGE_TAG = 1
         self._init_thread()
 
         # vid -> message deque
@@ -42,8 +49,8 @@ class _Worker:
         self._num_of_vertices, self._num_of_workers = comm.bcast(None, root=0)
 
         while True:
-            vertex_list = comm.recv(source=0, tag=self._ROOT_TAG)
-            if vertex_list == "$$$":
+            vertex_list = comm.recv(source=0, tag=_MASTER_MSG_TAG)
+            if vertex_list == _EOF:
                 break
 
             for v in vertex_list:
@@ -51,17 +58,28 @@ class _Worker:
                 self._vertex_map[v.get_vertex_id()] = v
                 self._active_vertices.add(v.get_vertex_id())
 
+    def _write(self):
+        comm = self._comm
+        vertex_list = []
+        for v in self._vertex_map.values():
+            vertex_list.append(self._writer.write_vertex(v))
+
+        comm.send(
+            vertex_list,
+            dest=0,
+            tag=_MASTER_MSG_TAG)
+
     def _init_thread(self):
         # message object deque
         self._stop_thread = False
         self._out_messages = SimpleQueue()
-        self._send_thr = Thread(target=self._send_worker, daemon=True)
+        _send_thr = Thread(target=self._send_worker, daemon=True)
 
         self._in_messages = []
-        self._recv_thr = Thread(target=self._recv_worker, daemon=True)
+        _recv_thr = Thread(target=self._recv_worker, daemon=True)
 
-        self._send_thr.start()
-        self._recv_thr.start()
+        _send_thr.start()
+        _recv_thr.start()
 
     def has_cur_message(self, vid):
         if vid not in self._cur_messages:
@@ -113,12 +131,11 @@ class _Worker:
     '''
 
     def run(self):
-        #self.debug()
+        # self.debug()
         comm = self._comm
         while True:
             # local superstep synchronization
             self._local_superstep = comm.bcast(None, root=0)
-            print("worker at " + str(self._local_superstep))
 
             # if the computation is over, break
             if self._local_superstep == -1:
@@ -134,7 +151,7 @@ class _Worker:
             self._vote_halt_vertices = set()
 
             for v in self._active_vertices:
-                assert (v in self._vertex_map)
+                assert v in self._vertex_map
                 self._vertex_map[v].compute()
 
             # aggregate local vertices (should be improved by tree reduction)
@@ -159,7 +176,8 @@ class _Worker:
 
             self._next_messages = dict()
 
-            self._active_vertices = self._vertex_map.keys() - (self._vote_halt_vertices - messaged_vertices)
+            self._active_vertices = self._vertex_map.keys() - \
+                (self._vote_halt_vertices - messaged_vertices)
 
             size_of_active_vertices = np.zeros(1)
             size_of_active_vertices[0] = len(self._active_vertices)
@@ -168,28 +186,39 @@ class _Worker:
                         op=MPI.SUM,
                         root=0)
 
-            print("worker %d %d" % (self._my_id, self._local_superstep))
+            print(
+                "worker %d finishes %d" %
+                (self._my_id, self._local_superstep))
 
-        for v in self._vertex_map.values():
-            print("%d %f" % (v.get_vertex_id(), v.get_value()))
+        comm.send(_EOF, dest=self._my_id, tag=_FINISH_MSG_TAG)
+
+        self._write()
 
     def _send_worker(self):
+        comm = self._comm
+
         while True:
             msg = self._out_messages.get()
-            self._comm.send(msg, self._vertex_to_worker_id(msg.get_src_vid()), tag=self._USER_MESSAGE_TAG)
+            comm.send(
+                msg,
+                self._vertex_to_worker_id(
+                    msg.get_src_vid()),
+                tag=_USER_MSG_TAG)
             # TODO combiner and local buffer list
 
     def _recv_worker(self):
+        comm = self._comm
+
         while True:
             s = MPI.Status()
-            self._comm.probe(status=s)
+            comm.probe(status=s)
 
-            if s.tag == self._USER_MESSAGE_TAG:
-                msg = self._comm.recv(source=MPI.ANY_SOURCE, tag=self._USER_MESSAGE_TAG)
+            if s.tag == _USER_MSG_TAG:
+                msg = comm.recv(source=MPI.ANY_SOURCE, tag=_USER_MSG_TAG)
                 self._in_messages.append(msg)
-            elif s.tag == self._ROOT_TAG:
-                msg = self._comm.recv(source=MPI.ANY_SOURCE, tag=self._ROOT_TAG)
-                if msg == "$$$":
-                    break
+            elif s.tag == _FINISH_MSG_TAG:
+                msg = comm.recv(source=MPI.ANY_SOURCE, tag=_FINISH_MSG_TAG)
+                assert msg == _EOF
+                break
 
             # TODO combiner

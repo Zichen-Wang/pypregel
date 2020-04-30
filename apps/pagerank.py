@@ -3,6 +3,7 @@ import sys
 from pypregel import Pypregel
 from pypregel.vertex import Vertex, Edge
 from pypregel.reader import Reader
+from pypregel.writer import Writer
 from pypregel.aggregator import Aggregator
 
 
@@ -44,6 +45,11 @@ class PageRankReader(Reader):
         return PageRankVertex(int(vertex_id), float(vertex_value), edges)
 
 
+class PageRankWriter(Writer):
+    def write_vertex(self, vertex):
+        return vertex.get_vertex_id(), str(vertex.get_value())
+
+
 class PageRankAggregator(Aggregator):
     def aggregate(self, vertices):
         print("page rank aggregate")
@@ -53,13 +59,14 @@ class PageRankAggregator(Aggregator):
 
 
 def main():
-    if len(sys.argv) < 3:
-        print("usage: python %s [config] [graph]" % sys.argv[0])
+    if len(sys.argv) < 4:
+        print("usage: python %s [config] [graph] [out_file]" % sys.argv[0])
         return
 
     pagerank_reader = PageRankReader(sys.argv[1], sys.argv[2])
+    pagerank_writer = PageRankWriter(sys.argv[3])
     pagerank_aggregator = PageRankAggregator()
-    pagerank = Pypregel(pagerank_reader)
+    pagerank = Pypregel(pagerank_reader, pagerank_writer)
 
     pagerank.run()
 
