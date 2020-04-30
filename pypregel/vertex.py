@@ -8,18 +8,11 @@ class Vertex:
         self._out_edges = out_edges
         self._worker = None
 
-        # Messages received in last superstep
-        self.prev_messages = []
-        self.message_index = 0
-
-        # Messages received in current superstep
-        self.cur_messages = []
-
     def set_worker(self, worker):
         self._worker = worker
 
     def has_worker(self):
-        return self._worker is None
+        return self._worker is not None
 
     def compute(self):
         raise NotImplementedError("Vertex compute() interface not implemented.")
@@ -49,28 +42,23 @@ class Vertex:
     def vote_to_halt(self):
         if not self.has_worker():
             raise AttributeError("Vertex worker not set")
-        self._worker.deactive(self._vid)
+        self._worker.halt(self._vid)
 
-    def send_message_to_vertex(self, dst_id, msg):
-        pass
+    def send_message_to_vertex(self, dst_vid, msg_value):
+        self._worker.send_cur_message(self._vid, dst_vid, msg_value)
 
     def has_message(self):
-        return self.message_index < len(self.prev_messages)
+        return self._worker.has_cur_message(self._vid)
 
     def get_message(self):
-        if not self.has_message():
-            raise ValueError("no more message")
+        return self._worker.get_cur_message(self._vid).get_value()
 
-        msg = self.prev_messages[self.message_index]
-        self.message_index += 1
-        return msg.value
-
-    def send_message_to_all_neighbors(self, msg):
+    def send_message_to_all_neighbors(self, msg_value):
         for e in self._out_edges:
-            self.send_message_to_vertex(e.get_dst_id(), msg)
+            self.send_message_to_vertex(e.get_dst_vid(), msg_value)
 
     def __str__(self):
-        s = "%d,%d:" % (self._vid, self._value)
+        s = str(self._vid) + " " + str(self._value) + ": "
         for e in self._out_edges:
             s += str(e) + " "
         return s
@@ -97,4 +85,4 @@ class Edge:
         self._value = value
 
     def __str__(self):
-        return "%d %d" % (self._dst_vid, self._value)
+        return str(self._dst_vid) + " " + str(self._value)

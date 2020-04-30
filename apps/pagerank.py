@@ -39,7 +39,7 @@ class PageRankReader(Reader):
         edges = []
         if line[1]:
             for e in line[1].split(' '):
-                edges.append(Edge(int(e.split(',')[0]), float(e.split(',')[1])))
+                edges.append(Edge(int(e.split(',')[0]), None))
 
         return PageRankVertex(int(vertex_id), float(vertex_value), edges)
 

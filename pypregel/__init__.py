@@ -10,7 +10,7 @@ class Pypregel:
         if self.rank == 0:
             self._master = _Master(self._comm, reader)
         else:
-            self._worker = _Worker(self._comm, )
+            self._worker = _Worker(self._comm)
 
         self._comm.Barrier()
 
@@ -19,5 +19,3 @@ class Pypregel:
             self._master.run()
         else:
             self._worker.run()
-
-        MPI.Finalize()

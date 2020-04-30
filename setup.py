@@ -7,6 +7,7 @@ with open('README.md') as readme_file:
 
 
 install_requires = [
+    'numpy',
     'mpi4py',
     'wheel',
     'setuptools'

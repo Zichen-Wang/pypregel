@@ -1,4 +1,5 @@
 from mpi4py import MPI
+import numpy as np
 
 
 class _Master:
@@ -6,7 +7,7 @@ class _Master:
         self._comm = comm
         self._reader = reader
         self._global_agg = None
-        self._super_step = 0
+        self._superstep = 0
         self._num_of_workers = comm.Get_size() - 1
 
         if self._num_of_workers <= 0:
@@ -59,30 +60,34 @@ class _Master:
     '''
 
     def run(self):
-        self._super_step = 1
+        self._superstep = 1
         self._num_of_active_vertices = self._num_of_vertices
         comm = self._comm
 
         while self._num_of_active_vertices > 0:
             # broadcast global superstep and global aggregation result
-            comm.bcast((self._super_step, self._global_agg), root=0)
+            comm.bcast(self._superstep, root=0)
+            #print("master step" + str(self._superstep))
 
             # receive global aggregation results (should be improved by tree reduction)
 
-
-            # increment global superstep
-            self._super_step += 1
-
             # reset the number of active vertices
-            self._num_of_active_vertices = 0
+            reduced_active_vertices = np.zeros(1)
 
-            # set a barrier before reduce the number of active vertices
             comm.Barrier()
 
-            comm.Reduce(None,
-                        [self._num_of_active_vertices, MPI.INT],
+            #print("master before reduce step " + str(self._superstep))
+
+            comm.Reduce(np.zeros(1),
+                        reduced_active_vertices,
                         op=MPI.SUM,
                         root=0)
 
+            # increment global superstep
+            self._superstep += 1
+            self._num_of_active_vertices = reduced_active_vertices[0]
+
         # broadcast to all workers that the computation is over
-        comm.bcast((-1, None), root=0)
+        comm.bcast(-1, root=0)
+        for i in range(self._num_of_workers):
+            comm.send("$$$", dest=i + 1, tag=0)
