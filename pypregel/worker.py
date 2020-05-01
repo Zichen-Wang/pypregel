@@ -85,7 +85,7 @@ class _Worker:
                 self._vertex_map[v.get_vertex_id()] = v
                 self._active_vertices.add(v.get_vertex_id())
 
-    def _write(self):
+    def write(self):
         """
         invoke user defined writer to serialize a vertex,
         then send vertices to the master
@@ -290,9 +290,6 @@ class _Worker:
                 (self._my_id, self._local_superstep))
 
         # end of while
-
-        # call writer to serialize vertices
-        self._write()
 
     def _send_worker(self):
         """

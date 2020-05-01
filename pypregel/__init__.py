@@ -28,5 +28,9 @@ class Pypregel:
 
         if self.rank == 0:
             self._master.run()
+            # gather results and write to file
+            self._master.write()
         else:
             self._worker.run()
+            # call writer to serialize vertices
+            self._worker.write()

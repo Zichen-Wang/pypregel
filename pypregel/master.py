@@ -103,10 +103,7 @@ class _Master:
         # broadcast to all workers that the computation is over
         comm.bcast(-1, root=0)
 
-        # gather results and write to file
-        self._write()
-
-    def _write(self):
+    def write(self):
         """
         gather vertex lists from each worker
         and write them to file
