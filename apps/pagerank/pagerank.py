@@ -4,6 +4,7 @@ from pypregel import Pypregel
 from pypregel.vertex import Vertex, Edge
 from pypregel.reader import Reader
 from pypregel.writer import Writer
+from pypregel.combiner import Combiner
 
 
 class PageRankVertex(Vertex):
@@ -50,6 +51,13 @@ class PageRankWriter(Writer):
         return vertex.get_vertex_id(), str(vertex.get_value())
 
 
+class PageRankCombiner(Combiner):
+    def combine(self, msg_x, msg_y):
+        msg_x_value = msg_x[1]
+        msg_y_value = msg_y[1]
+        return None, msg_x_value + msg_y_value
+
+
 def main():
     if len(sys.argv) < 4:
         print("usage: python %s [config] [graph] [out_file]" % sys.argv[0])
@@ -57,7 +65,12 @@ def main():
 
     pagerank_reader = PageRankReader(sys.argv[1], sys.argv[2])
     pagerank_writer = PageRankWriter(sys.argv[3])
-    pagerank = Pypregel(pagerank_reader, pagerank_writer)
+    pagerank_combiner = PageRankCombiner()
+    pagerank = Pypregel(
+        reader=pagerank_reader,
+        writer=pagerank_writer,
+        combiner=pagerank_combiner
+    )
 
     pagerank.run()
 
