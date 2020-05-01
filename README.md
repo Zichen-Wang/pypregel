@@ -15,11 +15,12 @@ At a iteration, each vertex can:
  
 We call a iteration as `Superstep` in PyPregel.
 
-
+---
 ### Installation ###
 On the parent directory of pypregel do:
 `pip install -e pypregel`
 
+---
 ### Run ###
 
 `config.txt`: configuration input file. Include number of vertices.
@@ -29,7 +30,7 @@ On the parent directory of pypregel do:
 ````
 mpirun -np [# of processes] python3 APPLICATION CONFIG_FILE GRAPH_FILE OUTPUT_FILE
 ````
-
+---
 ### Example
 There are 2 built-in examples for pypregel. PageRank and Single Source Shortest Path.
 
