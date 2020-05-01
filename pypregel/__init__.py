@@ -1,6 +1,7 @@
 from mpi4py import MPI
 from pypregel.master import _Master
 from pypregel.worker import _Worker
+import time
 
 
 class Pypregel:
@@ -27,10 +28,14 @@ class Pypregel:
         """
 
         if self.rank == 0:
+            start_time = time.time()
             self._master.run()
+            self._comm.Barrier()
+            print("--- %f sec ---" % (time.time() - start_time))
             # gather results and write to file
             self._master.write()
         else:
             self._worker.run()
+            self._comm.Barrier()
             # call writer to serialize vertices
             self._worker.write()
