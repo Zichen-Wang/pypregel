@@ -4,6 +4,7 @@ from pypregel import Pypregel
 from pypregel.vertex import Vertex, Edge
 from pypregel.reader import Reader
 from pypregel.writer import Writer
+from pypregel.combiner import Combiner
 
 
 INT_MAX = 1e10
@@ -59,6 +60,13 @@ class SSSPWriter(Writer):
         return vertex.get_vertex_id(), str(vertex.get_value())
 
 
+class SSSPCombiner(Combiner):
+    def combine(self, msg_x, msg_y):
+        msg_x_value = msg_x[1]
+        msg_y_value = msg_y[1]
+        return None, min(msg_x_value, msg_y_value)
+
+
 def main():
     if len(sys.argv) < 4:
         print("usage: python %s [config] [graph] [out_file]" % sys.argv[0])
@@ -66,7 +74,12 @@ def main():
 
     sssp_reader = SSSPReader(sys.argv[1], sys.argv[2])
     sssp_writer = SSSPWriter(sys.argv[3])
-    sssp = Pypregel(sssp_reader, sssp_writer)
+    sssp_combiner = SSSPCombiner()
+    sssp = Pypregel(
+        reader=sssp_reader,
+        writer=sssp_writer,
+        combiner=sssp_combiner
+    )
 
     sssp.run()
 

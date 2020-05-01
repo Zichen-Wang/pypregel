@@ -15,7 +15,7 @@ _USER_MSG_TAG = 1
 _EOF = "$$$"
 
 # this is a parameter of this system
-_BUFFER_CAPACITY = 1000
+_BUFFER_CAPACITY = 10
 
 
 class _Worker:
